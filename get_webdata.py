@@ -1,36 +1,70 @@
+import tkinter as tk
+from tkinter import messagebox
 import requests
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service as ChromeService
+import time
+from datetime import datetime
 
-# URL of the webpage to scrape
-url = "https://china.nba.cn/player/1628369"  # Replace with the actual URL
+def scrape_video():
+    # Get the URL from the input field
+    url = url_entry.get()
 
-# Send an HTTP GET request to the URL
-response = requests.get(url)
+    # Configure Chrome driver
+    service = ChromeService(executable_path='./chromedriver.exe')
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    driver = webdriver.Chrome(service=service, options=options)
 
-# Check if the request was successful
-if response.status_code == 200:
-    # Parse the HTML content of the page
-    soup = BeautifulSoup(response.content, 'html.parser')
+    try:
+        # Visit the target URL
+        driver.get(url)
+        time.sleep(5)
 
-    # Find the table (assuming it's the first table in the page)
-    table = soup.find('table')
-    print(table)
-    # Extract the headers
-    headers = [th.text.strip() for th in table.find_all('th')]
+        # Get page content
+        html_content = driver.page_source
 
-    # Extract the rows
-    rows = []
-    for tr in table.find_all('tr'):
-        cells = [td.text.strip() for td in tr.find_all('td')]
-        if cells:
-            rows.append(cells)
+        # Use BeautifulSoup to parse HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
+        video_element = soup.find('video')
+        video_download = video_element["src"]
 
-    # Print the extracted data
-    print("Headers:", headers)
-    print("Rows:")
-    for row in rows:
-        print(row)
-else:
-    print(f"Failed to retrieve the page. Status code: {response.status_code}")
+        # Download video
+        response = requests.get(video_download, stream=True)
 
+        # Check if request is successful
+        if response.status_code == 200:
+            # Generate filename based on current time
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"video_{current_time}.mp4"
+            with open(filename, "wb") as f:
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:
+                        f.write(chunk)
+            messagebox.showinfo("Success", "成功下载!")
+        else:
+            messagebox.showerror("Error", "下载失败.")
+    except Exception as e:
+        messagebox.showerror("Error", str(e))
+    finally:
+        driver.quit()
 
+# Create tkinter window
+window = tk.Tk()
+window.title("www.zhibo8.com视频下载器")
+
+# Label and Entry for URL input
+url_label = tk.Label(window, text="网址:")
+url_label.pack(pady=5)
+url_entry = tk.Entry(window, width=50)
+url_entry.pack(pady=5)
+
+# Button to trigger web scraping
+scrape_button = tk.Button(window, text="运行", command=scrape_video)
+scrape_button.pack(pady=10)
+
+# Run tkinter event loop
+window.mainloop()
